@@ -43,6 +43,21 @@ class PredictionResult(BaseModel):
     description: str | None = None
     specialist: str | None = None
 
+# Health check endpoint
+@app.get("/")
+def health_check():
+    """Health check endpoint."""
+    return {
+        "message": "Disease Prediction API is running",
+        "status": "healthy",
+        "version": "1.0",
+        "endpoints": {
+            "health": "/",
+            "predict": "/predict",
+            "docs": "/docs"
+        }
+    }
+
 @app.post("/predict", response_model=PredictionResult)
 def predict_disease(input_data: SymptomInput):
     try:

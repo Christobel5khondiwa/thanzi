@@ -13,6 +13,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://4k82j6wf-8000.uks1.devtunnels.ms",  # Your dev tunnel
+        "https://thanzi.onrender.com",  # Your future Render URL
+        "https://*.onrender.com",  # Any Render subdomain
         "http://localhost:3000",  # React default
         "http://localhost:5173",  # Vite default
         "http://127.0.0.1:3000",
@@ -75,7 +77,13 @@ def predict_disease(input_data: SymptomInput):
 # Run the server
 if __name__ == "__main__":
     import uvicorn
+    import os
+
+    # Get port from environment variable (Render sets this)
+    port = int(os.environ.get("PORT", 8000))
+
     print("🚀 Starting Disease Prediction API...")
-    print("📍 API will be available at: http://localhost:8000")
-    print("📖 Documentation: http://localhost:8000/docs")
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    print(f"📍 API will be available on port: {port}")
+    print("📖 Documentation: /docs")
+
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

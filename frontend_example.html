@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disease Prediction Frontend</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select, button {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .selected-symptoms {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            min-height: 40px;
+        }
+        .symptom-tag {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .result.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .result.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+        .confidence {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .status {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .status.online {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.offline {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 Disease Prediction System</h1>
+        
+        <div id="apiStatus" class="status">
+            Checking API status...
+        </div>
+
+        <div class="form-group">
+            <label for="symptomSelect">Select Symptoms:</label>
+            <select id="symptomSelect">
+                <option value="">Loading symptoms...</option>
+            </select>
+            <button type="button" onclick="addSymptom()">Add Symptom</button>
+        </div>
+
+        <div class="form-group">
+            <label>Selected Symptoms:</label>
+            <div id="selectedSymptoms" class="selected-symptoms">
+                No symptoms selected
+            </div>
+        </div>
+
+        <button id="predictBtn" onclick="predictDisease()" disabled>
+            Predict Disease
+        </button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let availableSymptoms = [];
+        let selectedSymptoms = [];
+
+        // Check API status
+        async function checkAPIStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/`);
+                const data = await response.json();
+                document.getElementById('apiStatus').innerHTML = 
+                    `✅ API Status: ${data.status} (v${data.version})`;
+                document.getElementById('apiStatus').className = 'status online';
+                return true;
+            } catch (error) {
+                document.getElementById('apiStatus').innerHTML = 
+                    '❌ API is offline. Please start the backend server.';
+                document.getElementById('apiStatus').className = 'status offline';
+                return false;
+            }
+        }
+
+        // Load available symptoms
+        async function loadSymptoms() {
+            try {
+                const response = await fetch(`${API_BASE}/symptoms`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    availableSymptoms = data.symptoms;
+                    const select = document.getElementById('symptomSelect');
+                    select.innerHTML = '<option value="">Select a symptom...</option>';
+                    
+                    data.symptoms.forEach(symptom => {
+                        const option = document.createElement('option');
+                        option.value = symptom;
+                        option.textContent = symptom.replace(/_/g, ' ');
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading symptoms:', error);
+            }
+        }
+
+        // Add symptom to selection
+        function addSymptom() {
+            const select = document.getElementById('symptomSelect');
+            const symptom = select.value;
+            
+            if (symptom && !selectedSymptoms.includes(symptom)) {
+                selectedSymptoms.push(symptom);
+                updateSelectedSymptoms();
+                select.value = '';
+            }
+        }
+
+        // Update selected symptoms display
+        function updateSelectedSymptoms() {
+            const container = document.getElementById('selectedSymptoms');
+            
+            if (selectedSymptoms.length === 0) {
+                container.innerHTML = 'No symptoms selected';
+                document.getElementById('predictBtn').disabled = true;
+            } else {
+                container.innerHTML = selectedSymptoms.map(symptom => 
+                    `<span class="symptom-tag">${symptom.replace(/_/g, ' ')} 
+                     <span onclick="removeSymptom('${symptom}')" style="cursor:pointer;">×</span></span>`
+                ).join('');
+                document.getElementById('predictBtn').disabled = false;
+            }
+        }
+
+        // Remove symptom
+        function removeSymptom(symptom) {
+            selectedSymptoms = selectedSymptoms.filter(s => s !== symptom);
+            updateSelectedSymptoms();
+        }
+
+        // Predict disease
+        async function predictDisease() {
+            if (selectedSymptoms.length === 0) return;
+
+            const resultDiv = document.getElementById('result');
+            const predictBtn = document.getElementById('predictBtn');
+            
+            // Show loading
+            resultDiv.innerHTML = '<div class="loading">🔄 Analyzing symptoms...</div>';
+            predictBtn.disabled = true;
+            predictBtn.textContent = 'Analyzing...';
+
+            try {
+                const response = await fetch(`${API_BASE}/predict`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        symptoms: selectedSymptoms
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <h3>🎯 Prediction Result</h3>
+                            <div class="confidence">Disease: ${data.disease.replace(/_/g, ' ')}</div>
+                            <div class="confidence">Confidence: ${data.confidence}%</div>
+                            ${data.description ? `<p><strong>Description:</strong> ${data.description}</p>` : ''}
+                            ${data.specialist ? `<p><strong>Recommended Specialist:</strong> ${data.specialist}</p>` : ''}
+                            <p><strong>Matched Symptoms:</strong> ${data.matched_symptoms.length} out of ${selectedSymptoms.length}</p>
+                            <small>Note: This is for educational purposes only. Please consult a healthcare professional.</small>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <h3>❌ Error</h3>
+                            <p>${data.error}</p>
+                            ${data.code ? `<small>Error Code: ${data.code}</small>` : ''}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ Connection Error</h3>
+                        <p>Could not connect to the API. Please check if the backend is running.</p>
+                    </div>
+                `;
+            } finally {
+                predictBtn.disabled = false;
+                predictBtn.textContent = 'Predict Disease';
+            }
+        }
+
+        // Initialize app
+        async function init() {
+            const apiOnline = await checkAPIStatus();
+            if (apiOnline) {
+                await loadSymptoms();
+            }
+        }
+
+        // Start the app
+        init();
+    </script>
+</body>
+</html>

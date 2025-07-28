@@ -42,6 +42,8 @@ class PredictionResult(BaseModel):
     disease: str
     description: str | None = None
     specialist: str | None = None
+    unknown_symptoms: list[str] = []
+    valid_symptoms: list[str] = []
 
 # Health check endpoint
 @app.get("/")
@@ -61,14 +63,42 @@ def health_check():
 @app.post("/predict", response_model=PredictionResult)
 def predict_disease(input_data: SymptomInput):
     try:
-        # Clean symptoms
+        # Validate input
+        if not input_data.symptoms:
+            raise HTTPException(status_code=400, detail="No symptoms provided. Please provide at least one symptom.")
+
+        # Clean and normalize symptoms
         symptoms = []
         for s in input_data.symptoms:
-            parts = [p.strip().lower() for p in s.split(',') if p.strip()]
+            parts = [p.strip().lower().replace(' ', '_') for p in s.split(',') if p.strip()]
             symptoms.extend(parts)
 
-        # Create input vector
-        input_dict = {col: (1 if col in symptoms else 0) for col in test_col}
+        # Validate symptoms against known features
+        valid_symptoms = []
+        unknown_symptoms = []
+
+        for symptom in symptoms:
+            if symptom in test_col:
+                valid_symptoms.append(symptom)
+            else:
+                unknown_symptoms.append(symptom)
+
+        # If no valid symptoms found, return error with unknown symptoms
+        if not valid_symptoms:
+            return PredictionResult(
+                disease="unknown",
+                description="No valid symptoms provided. All symptoms are unknown to the model.",
+                specialist=None,
+                unknown_symptoms=unknown_symptoms,
+                valid_symptoms=valid_symptoms
+            )
+
+        # If some symptoms are unknown, still predict but inform user
+        if unknown_symptoms:
+            print(f"Warning: Unknown symptoms detected: {unknown_symptoms}")
+
+        # Create input vector using only valid symptoms
+        input_dict = {col: (1 if col in valid_symptoms else 0) for col in test_col}
         input_df = pd.DataFrame([input_dict])
 
         # Predict
@@ -83,11 +113,27 @@ def predict_disease(input_data: SymptomInput):
         return PredictionResult(
             disease=predicted,
             description=description,
-            specialist=specialist
+            specialist=specialist,
+            unknown_symptoms=unknown_symptoms,
+            valid_symptoms=valid_symptoms
         )
 
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
+        print(f"Prediction error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
+# Get available symptoms endpoint
+@app.get("/symptoms")
+def get_symptoms():
+    """Get list of all valid symptoms that the model recognizes."""
+    available_symptoms = [s for s in test_col if s != 'nan']
+    return {
+        "total_symptoms": len(available_symptoms),
+        "symptoms": sorted(available_symptoms),
+        "message": "These are the valid symptoms the model can recognize"
+    }
 
 # Run the server
 if __name__ == "__main__":
